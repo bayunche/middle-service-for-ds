@@ -4,6 +4,11 @@ import cors from '@koa/cors';
 import { config } from './config';
 import apiRouter from './routes/api';
 
+import dotenv from 'dotenv';
+
+// 加载环境变量
+dotenv.config();
+
 const app = new Koa();
 
 // 中间件

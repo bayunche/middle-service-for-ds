@@ -1,9 +1,11 @@
+
 import Router from '@koa/router';
 import { Context } from 'koa';
 import { OllamaService } from '../ollama';
 import {
     OllamaGenerateRequest,
     OllamaChatRequest,
+    OllamaChatResponse,
     OllamaEmbeddingRequest,
     OllamaCreateRequest,
     OllamaPullRequest,
@@ -13,6 +15,9 @@ import {
 } from '../types';
 
 import { config } from '../config';
+// 新增引入保存消息和会话的模块
+import { saveMessage } from '../db';
+import { Conversation } from '../sequelizeUtil';
 
 const router = new Router({
     prefix: '/api'
@@ -104,7 +109,6 @@ router.post('/chat', async (ctx: Context) => {
         ctx.set('Cache-Control', 'no-cache');
         ctx.set('Connection', 'keep-alive');
 
-        // 创建Node.js流并传输到Koa响应
         const reader = stream.getReader();
         const nodeStream = new (require('stream')).Readable({
             async read() {
@@ -130,6 +134,29 @@ router.post('/chat', async (ctx: Context) => {
             ctx.status = 500;
             ctx.body = { error: '请求处理失败' };
             return;
+        }
+
+        // 新增：获取userId（若未传，使用默认值1）以及conversationId
+        const userId = (request as any).userId || 1;
+        let conversationId = (request as any).conversationId;
+        if (!conversationId) {
+            const newConversation = await Conversation.create({ userId, created_at: new Date() });
+            conversationId = newConversation.id;
+        }
+
+        // 保存消息记录到数据库，增加userId、conversationId、flag字段
+        try {
+            await saveMessage({
+                model: request.model,
+                messages: request.messages,
+                response: response,
+                createdAt: new Date(), // 修改属性名以适配保存函数
+                userId,
+                conversationId,
+                flag: 'model'
+            });
+        } catch (e) {
+            console.error("保存消息记录出错：", e);
         }
 
         ctx.body = response;
@@ -359,3 +386,4 @@ router.get('/queue-status', (ctx: Context) => {
 });
 
 export default router;
+
