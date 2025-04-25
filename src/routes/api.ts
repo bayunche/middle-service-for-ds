@@ -109,6 +109,10 @@ router.post('/chat', async (ctx: Context) => {
         ctx.set('Cache-Control', 'no-cache');
         ctx.set('Connection', 'keep-alive');
 
+        // 拼接返回的消息
+        let fullMessage = '';
+
+        // 创建Node.js流并传输到Koa响应
         const reader = stream.getReader();
         const nodeStream = new (require('stream')).Readable({
             async read() {
@@ -116,8 +120,33 @@ router.post('/chat', async (ctx: Context) => {
                     const { done, value } = await reader.read();
                     if (done) {
                         this.push(null);
+                        // 新增：获取userId（若未传，使用默认值1）以及conversationId
+                        const userId = (request as any).userId || 1;
+                        let conversationId = (request as any).conversationId;
+                        if (!conversationId) {
+                            const newConversation = await Conversation.create({ userId, created_at: new Date() });
+                            conversationId = newConversation.id;
+                        }
+
+                        // 保存消息记录到数据库，增加userId、conversationId、flag字段
+                        try {
+                            await saveMessage({
+                                model: request.model,
+                                messages: request.messages,
+                                response: fullMessage,
+                                createdAt: new Date(), // 修改属性名以适配保存函数
+                                userId,
+                                conversationId,
+                                flag: 'model'
+                            });
+                        } catch (e) {
+                            console.error("保存消息记录出错：", e);
+                        }
                     } else {
+                        // 新增：保存流式响应的消息记录
+                        fullMessage += value.message.content;
                         this.push(JSON.stringify(value) + '\n');
+
                     }
                 } catch (error) {
                     this.destroy(error as Error);
