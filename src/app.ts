@@ -3,7 +3,7 @@ import bodyParser from 'koa-bodyparser';
 import cors from '@koa/cors';
 import { config } from './config';
 import apiRouter from './routes/api';
-
+import tokenValider from './middleWare/tokenValider';
 import dotenv from 'dotenv';
 
 // 加载环境变量
@@ -14,6 +14,8 @@ const app = new Koa();
 // 中间件
 app.use(cors());
 app.use(bodyParser());
+app.use(tokenValider);
+
 
 // 错误处理
 app.use(async (ctx, next) => {
